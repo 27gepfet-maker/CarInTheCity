@@ -4,26 +4,40 @@
   <meta charset="UTF-8">
   <title>VR Driving Simulator - Meta Quest 3 Ready</title>
   <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-  <!-- A-Frame Core Library -->
+  
+  <!-- A-Frame VR Core Library over Secure HTTPS -->
   <script src="https://aframe.io/releases/1.4.2/aframe.min.js"></script>
+
   <style>
-    body {
+    html, body {
       margin: 0;
       padding: 0;
+      width: 100vw;
+      height: 100vh;
       overflow: hidden;
+      background-color: #0d1b2a;
       font-family: 'Segoe UI', Roboto, Helvetica, Arial, sans-serif;
       user-select: none;
-      background-color: #000;
     }
 
-    /* Desktop / Mobile Control Overlay */
+    /* Scene canvas fix to prevent black screen overlay hiding */
+    a-scene {
+      position: absolute !important;
+      top: 0;
+      left: 0;
+      width: 100vw !important;
+      height: 100vh !important;
+      z-index: 1;
+    }
+
+    /* On-Screen HUD Dashboard */
     #hud {
       position: absolute;
       top: 15px;
       left: 15px;
-      z-index: 999;
-      background: rgba(10, 15, 25, 0.85);
-      border: 2px solid rgba(0, 230, 255, 0.5);
+      z-index: 9999;
+      background: rgba(10, 15, 25, 0.88);
+      border: 2px solid rgba(0, 230, 255, 0.6);
       border-radius: 12px;
       padding: 15px 20px;
       color: #00f0ff;
@@ -85,19 +99,14 @@
 
     #reset-btn:hover {
       background: #ff4d5e;
-      transform: translateY(-1px);
     }
 
-    #reset-btn:active {
-      transform: translateY(1px);
-    }
-
-    /* On-Screen Touch Driving Controls for Mobile/Desktop Preview */
+    /* On-Screen Touch Buttons */
     #touch-controls {
       position: absolute;
       bottom: 20px;
       right: 20px;
-      z-index: 999;
+      z-index: 9999;
       display: flex;
       gap: 12px;
       flex-direction: column;
@@ -112,12 +121,11 @@
       border-radius: 50%;
       color: white;
       font-weight: bold;
-      font-size: 20px;
+      font-size: 18px;
       display: flex;
       align-items: center;
       justify-content: center;
       touch-action: manipulation;
-      user-select: none;
       cursor: pointer;
     }
 
@@ -128,7 +136,7 @@
 </head>
 <body>
 
-  <!-- On-Screen HUD Dashboard -->
+  <!-- On-Screen Dashboard -->
   <div id="hud">
     <div class="stat-label">SPEED</div>
     <div class="stat-value"><span id="speed-display">0</span> <span style="font-size: 14px;">MPH</span></div>
@@ -145,552 +153,60 @@
       <strong>VR Quest 3 Controls:</strong><br>
       • <strong>Right Trigger / Stick UP:</strong> GAS<br>
       • <strong>Left Trigger / Stick DOWN:</strong> BRAKE / REVERSE<br>
-      • <strong>Grip Wheels (L/R):</strong> Grab Steering Wheel & Rotate<br><br>
+      • <strong>Grip Wheels (L/R):</strong> Grab Steering Wheel & Turn<br><br>
       <strong>Keyboard Controls:</strong><br>
       • <strong>W / Up:</strong> Gas | <strong>S / Down:</strong> Reverse<br>
-      • <strong>A / D:</strong> Smooth Turn | <strong>Mouse Drag:</strong> Steering Wheel
+      • <strong>A / D:</strong> Turn | <strong>Mouse Drag:</strong> Steering Wheel
     </div>
   </div>
 
-  <!-- On-Screen Touch Buttons -->
   <div id="touch-controls">
     <div class="touch-btn" id="btn-gas">GAS</div>
     <div class="touch-btn" id="btn-brake" style="border-color: #ff4d5e;">REV</div>
   </div>
 
-  <!-- A-Frame VR Scene -->
+  <!-- A-Frame VR Scene (embedded tag added to render canvas cleanly) -->
   <a-scene 
-    renderer="antialias: true; colorManagement: true; highRefreshRate: true"
+    embedded
+    renderer="antialias: true; colorManagement: true;"
     vr-mode-ui="enabled: true"
     background="color: #0d1b2a">
-
-    <a-assets>
-      <!-- Generated Procedural Canvas Textures in Script below -->
-      <canvas id="road-canvas" width="512" height="512"></canvas>
-      <canvas id="building-canvas" width="512" height="512"></canvas>
-    </a-assets>
 
     <!-- Lighting -->
     <a-entity type="ambient" color="#667788" intensity="0.8"></a-entity>
     <a-entity type="directional" position="20 40 10" color="#fffaed" intensity="1.2"></a-entity>
 
-    <!-- Sky Environment -->
+    <!-- Sky -->
     <a-sky color="#0a1118"></a-sky>
 
-    <!-- Road Surface Plane with Asphalt Texture -->
-    <a-plane 
-      id="ground"
-      position="0 0 0" 
-      rotation="-90 0 0" 
-      width="1000" 
-      height="1000" 
-      material="src: #road-canvas; repeat: 100 100; roughness: 0.8; metalness: 0.1">
-    </a-plane>
+    <!-- Road Surface Plane -->
+    <a-plane position="0 0 0" rotation="-90 0 0" width="1000" height="1000" color="#1a222d" roughness="0.8"></a-plane>
+    <a-plane position="0 0.01 0" rotation="-90 0 0" width="16" height="1000" color="#222b35" roughness="0.6"></a-plane>
+    <a-plane position="-0.1 0.02 0" rotation="-90 0 0" width="0.15" height="1000" color="#ffcc00"></a-plane>
+    <a-plane position="0.1 0.02 0" rotation="-90 0 0" width="0.15" height="1000" color="#ffcc00"></a-plane>
 
-    <!-- Dynamic City Blocks Container -->
+    <!-- Dynamic Buildings Container -->
     <a-entity id="city-buildings"></a-entity>
 
-    <!-- MAIN CAR VEHICLE RIG -->
+    <!-- CAR VEHICLE RIG -->
     <a-entity id="car-rig" position="0 0.5 0" driving-system>
 
-      <!-- CAR BODY CHASSIS (Made of Boxes) -->
+      <!-- CAR BODY CHASSIS -->
       <a-entity id="car-body">
-        <!-- Main Frame Base -->
         <a-box position="0 0.3 0" width="2.2" height="0.6" depth="4.4" color="#d62828" material="roughness: 0.3; metalness: 0.5"></a-box>
-        <!-- Cabin / Roof Structure -->
         <a-box position="0 0.9 -0.3" width="1.9" height="0.75" depth="2.2" color="#111111" material="roughness: 0.1; metalness: 0.8; opacity: 0.9"></a-box>
-        <!-- Windshield -->
         <a-box position="0 0.95 0.75" rotation="-25 0 0" width="1.85" height="0.6" depth="0.1" color="#88ccff" material="opacity: 0.5; transparent: true"></a-box>
-        <!-- Front Hood Accent -->
         <a-box position="0 0.62 1.3" width="2.0" height="0.08" depth="1.6" color="#b71c1c"></a-box>
-        <!-- Headlights -->
         <a-box position="-0.85 0.4 2.18" width="0.3" height="0.15" depth="0.1" color="#ffffaa" material="emissive: #ffffaa; emissiveIntensity: 2"></a-box>
         <a-box position="0.85 0.4 2.18" width="0.3" height="0.15" depth="0.1" color="#ffffaa" material="emissive: #ffffaa; emissiveIntensity: 2"></a-box>
-        <!-- Taillights -->
         <a-box position="-0.85 0.4 -2.18" width="0.35" height="0.15" depth="0.1" color="#ff0000" material="emissive: #ff0000; emissiveIntensity: 1.5"></a-box>
         <a-box position="0.85 0.4 -2.18" width="0.35" height="0.15" depth="0.1" color="#ff0000" material="emissive: #ff0000; emissiveIntensity: 1.5"></a-box>
-        <!-- Dashboard Console -->
         <a-box position="0 0.75 0.45" width="1.8" height="0.35" depth="0.4" color="#1a1a1a"></a-box>
       </a-entity>
 
-      <!-- FOUR WHEELS (CYLINDERS WITH SPOKES) -->
-      <!-- Front Left Wheel Rig (Pivots for Steering + Spins) -->
+      <!-- FOUR WHEELS -->
       <a-entity id="wheel-fl-pivot" position="-1.25 0 1.3">
         <a-cylinder class="wheel-mesh" rotation="0 0 90" radius="0.4" height="0.3" color="#151515" material="roughness: 0.9">
           <a-box position="0 0.16 0" width="0.08" height="0.05" depth="0.7" color="#cccccc"></a-box>
           <a-box position="0 0.16 0" width="0.7" height="0.05" depth="0.08" color="#cccccc"></a-box>
         </a-cylinder>
-      </a-entity>
-
-      <!-- Front Right Wheel Rig (Pivots for Steering + Spins) -->
-      <a-entity id="wheel-fr-pivot" position="1.25 0 1.3">
-        <a-cylinder class="wheel-mesh" rotation="0 0 90" radius="0.4" height="0.3" color="#151515" material="roughness: 0.9">
-          <a-box position="0 0.16 0" width="0.08" height="0.05" depth="0.7" color="#cccccc"></a-box>
-          <a-box position="0 0.16 0" width="0.7" height="0.05" depth="0.08" color="#cccccc"></a-box>
-        </a-cylinder>
-      </a-entity>
-
-      <!-- Rear Left Wheel (Spins only) -->
-      <a-entity id="wheel-rl-pivot" position="-1.25 0 -1.3">
-        <a-cylinder class="wheel-mesh" rotation="0 0 90" radius="0.4" height="0.3" color="#151515" material="roughness: 0.9">
-          <a-box position="0 0.16 0" width="0.08" height="0.05" depth="0.7" color="#cccccc"></a-box>
-          <a-box position="0 0.16 0" width="0.7" height="0.05" depth="0.08" color="#cccccc"></a-box>
-        </a-cylinder>
-      </a-entity>
-
-      <!-- Rear Right Wheel (Spins only) -->
-      <a-entity id="wheel-rr-pivot" position="1.25 0 -1.3">
-        <a-cylinder class="wheel-mesh" rotation="0 0 90" radius="0.4" height="0.3" color="#151515" material="roughness: 0.9">
-          <a-box position="0 0.16 0" width="0.08" height="0.05" depth="0.7" color="#cccccc"></a-box>
-          <a-box position="0 0.16 0" width="0.7" height="0.05" depth="0.08" color="#cccccc"></a-box>
-        </a-cylinder>
-      </a-entity>
-
-      <!-- STEERING WHEEL ASSEMBLY (POSITIONED RIGHT IN FRONT OF DRIVER) -->
-      <a-entity id="steering-column" position="-0.45 0.85 0.25" rotation="25 0 0">
-        <!-- Wheel Shaft Column -->
-        <a-cylinder position="0 -0.15 0" radius="0.03" height="0.4" color="#333"></a-cylinder>
-        
-        <!-- Interactive Steering Wheel Entity -->
-        <a-entity id="steering-wheel" steering-wheel-grab class="interactive">
-          <!-- Outer Torus Ring -->
-          <a-torus radius="0.25" radius-tubular="0.025" color="#1a1a1a" material="roughness: 0.5; metalness: 0.3"></a-torus>
-          <!-- Center Hub -->
-          <a-cylinder radius="0.07" height="0.04" color="#d62828" rotation="90 0 0"></a-cylinder>
-          <!-- Steering Spokes -->
-          <a-box position="0 0 0" width="0.44" height="0.02" depth="0.02" color="#555"></a-box>
-          <a-box position="0 -0.11 0" width="0.02" height="0.22" depth="0.02" color="#555"></a-box>
-          <!-- Top Wheel Alignment Marker Strip -->
-          <a-box position="0 0.24 0.01" width="0.03" height="0.03" depth="0.03" color="#00f0ff"></a-box>
-        </a-entity>
-      </a-entity>
-
-      <!-- DRIVER CAMERA RIG (LOOKING FORWARD DIRECTLY DOWN THE ROAD) -->
-      <a-entity id="driver-rig" position="-0.45 1.05 -0.1" rotation="0 0 0">
-        <a-camera id="driver-camera" look-controls="pointerLockEnabled: false" touch-enabled="false" wasd-controls="enabled: false" fov="75" near="0.05">
-          <!-- Desktop Raycaster Cursor for Dragging Wheel -->
-          <a-cursor 
-            id="cursor" 
-            raycaster="objects: .interactive" 
-            fuse="false" 
-            color="#00f0ff" 
-            scale="0.8 0.8 0.8" 
-            position="0 0 -1">
-          </a-cursor>
-        </a-camera>
-
-        <!-- META QUEST 3 VR HAND CONTROLLERS -->
-        <a-entity id="left-hand" 
-          oculus-touch-controls="hand: left" 
-          laser-controls="hand: left" 
-          raycaster="objects: .interactive; far: 2" 
-          vr-controller-drive="hand: left">
-        </a-entity>
-
-        <a-entity id="right-hand" 
-          oculus-touch-controls="hand: right" 
-          laser-controls="hand: right" 
-          raycaster="objects: .interactive; far: 2" 
-          vr-controller-drive="hand: right">
-        </a-entity>
-      </a-entity>
-
-    </a-entity> <!-- END CAR RIG -->
-
-  </a-scene>
-
-  <script>
-    // Safe Math Helper
-    function safeNum(val, defaultVal = 0) {
-      if (typeof val !== 'number' || isNaN(val) || !isFinite(val)) {
-        return defaultVal;
-      }
-      return val;
-    }
-
-    // Global Driving State
-    window.driveState = {
-      gas: 0,
-      brake: 0,
-      keyGas: false,
-      keyBrake: false,
-      keyLeft: false,
-      keyRight: false,
-      touchGas: false,
-      touchBrake: false,
-      steeringAngle: 0, // In Degrees (-90 to +90)
-      currentSpeed: 0,
-      maxSpeed: 25,
-      maxReverseSpeed: -8,
-      acceleration: 10,
-      deceleration: 7,
-      friction: 4,
-      brakeForce: 18
-    };
-
-    // Procedural Canvas Textures
-    function generateTextures() {
-      const roadCanvas = document.getElementById('road-canvas');
-      if (roadCanvas) {
-        const ctx = roadCanvas.getContext('2d');
-        ctx.fillStyle = '#1e242b';
-        ctx.fillRect(0, 0, 512, 512);
-
-        for (let i = 0; i < 4000; i++) {
-          ctx.fillStyle = Math.random() > 0.5 ? '#28303a' : '#14181f';
-          ctx.fillRect(Math.random() * 512, Math.random() * 512, 2, 2);
-        }
-
-        ctx.fillStyle = '#ffffff';
-        ctx.fillRect(10, 0, 12, 512);
-        ctx.fillRect(490, 0, 12, 512);
-
-        ctx.fillStyle = '#ffcc00';
-        ctx.fillRect(250, 0, 4, 512);
-        ctx.fillRect(258, 0, 4, 512);
-
-        ctx.fillStyle = '#ffffff';
-        ctx.setLineDash([30, 30]);
-        ctx.lineWidth = 4;
-        ctx.beginPath();
-        ctx.moveTo(130, 0); ctx.lineTo(130, 512);
-        ctx.moveTo(380, 0); ctx.lineTo(380, 512);
-        ctx.stroke();
-      }
-
-      const buildCanvas = document.getElementById('building-canvas');
-      if (buildCanvas) {
-        const ctx = buildCanvas.getContext('2d');
-        ctx.fillStyle = '#111822';
-        ctx.fillRect(0, 0, 512, 512);
-
-        const cols = 8;
-        const rows = 12;
-        const padX = 20;
-        const padY = 15;
-        const w = (512 - (cols + 1) * padX) / cols;
-        const h = (512 - (rows + 1) * padY) / rows;
-
-        for (let r = 0; r < rows; r++) {
-          for (let c = 0; c < cols; c++) {
-            const x = padX + c * (w + padX);
-            const y = padY + r * (h + padY);
-            const lit = Math.random() > 0.35;
-            ctx.fillStyle = lit ? (Math.random() > 0.3 ? '#ffea8f' : '#88e1ff') : '#1c2636';
-            ctx.fillRect(x, y, w, h);
-          }
-        }
-      }
-    }
-
-    // Procedural City Spawns
-    function spawnCityBuildings() {
-      const container = document.getElementById('city-buildings');
-      if (!container) return;
-
-      const blockSize = 60;
-      const numBlocks = 10;
-      
-      for (let i = -numBlocks; i <= numBlocks; i++) {
-        if (Math.abs(i) < 1) continue;
-
-        const leftBldg = document.createElement('a-box');
-        const heightL = 25 + Math.random() * 45;
-        leftBldg.setAttribute('position', `-25 ${heightL / 2} ${i * blockSize}`);
-        leftBldg.setAttribute('width', '20');
-        leftBldg.setAttribute('height', heightL);
-        leftBldg.setAttribute('depth', '45');
-        leftBldg.setAttribute('material', 'src: #building-canvas; repeat: 2 ' + Math.floor(heightL / 8) + '; roughness: 0.4');
-        container.appendChild(leftBldg);
-
-        const rightBldg = document.createElement('a-box');
-        const heightR = 25 + Math.random() * 45;
-        rightBldg.setAttribute('position', `25 ${heightR / 2} ${i * blockSize}`);
-        rightBldg.setAttribute('width', '20');
-        rightBldg.setAttribute('height', heightR);
-        rightBldg.setAttribute('depth', '45');
-        rightBldg.setAttribute('material', 'src: #building-canvas; repeat: 2 ' + Math.floor(heightR / 8) + '; roughness: 0.4');
-        container.appendChild(rightBldg);
-      }
-    }
-
-    // VR Controller Input Handler
-    AFRAME.registerComponent('vr-controller-drive', {
-      schema: { hand: { type: 'string', default: 'right' } },
-
-      init: function () {
-        this.el.addEventListener('triggerdown', this.onTriggerDown.bind(this));
-        this.el.addEventListener('triggerup', this.onTriggerUp.bind(this));
-        this.el.addEventListener('thumbstickmove', this.onThumbstick.bind(this));
-        this.el.addEventListener('gripdown', this.onGripDown.bind(this));
-        this.el.addEventListener('gripup', this.onGripUp.bind(this));
-
-        this.isGripping = false;
-        this.lastHandRotationY = 0;
-      },
-
-      onTriggerDown: function () {
-        if (this.data.hand === 'right') {
-          window.driveState.gas = 1.0;
-        } else {
-          window.driveState.brake = 1.0;
-        }
-      },
-
-      onTriggerUp: function () {
-        if (this.data.hand === 'right') {
-          window.driveState.gas = 0.0;
-        } else {
-          window.driveState.brake = 0.0;
-        }
-      },
-
-      onThumbstick: function (evt) {
-        const yAxis = evt.detail.y;
-        if (this.data.hand === 'right') {
-          if (yAxis < -0.2) {
-            window.driveState.gas = Math.abs(yAxis);
-          } else {
-            window.driveState.gas = 0;
-          }
-        } else if (this.data.hand === 'left') {
-          if (yAxis > 0.2) {
-            window.driveState.brake = yAxis;
-          } else {
-            window.driveState.brake = 0;
-          }
-        }
-      },
-
-      onGripDown: function () {
-        this.isGripping = true;
-        const handRot = this.el.getAttribute('rotation');
-        if (handRot) {
-          this.lastHandRotationY = safeNum(handRot.z || handRot.y);
-        }
-      },
-
-      onGripUp: function () {
-        this.isGripping = false;
-      },
-
-      tick: function () {
-        if (this.isGripping) {
-          const rot = this.el.getAttribute('rotation');
-          if (rot) {
-            const currentZ = safeNum(rot.z);
-            const deltaZ = currentZ - this.lastHandRotationY;
-            this.lastHandRotationY = currentZ;
-
-            let newAngle = window.driveState.steeringAngle - deltaZ * 1.0;
-            window.driveState.steeringAngle = Math.max(-90, Math.min(90, safeNum(newAngle)));
-          }
-        }
-      }
-    });
-
-    // Interactive Steering Wheel Grab
-    AFRAME.registerComponent('steering-wheel-grab', {
-      init: function () {
-        this.isDragging = false;
-        this.previousX = 0;
-
-        const el = this.el;
-
-        el.addEventListener('mousedown', (e) => {
-          this.isDragging = true;
-          this.previousX = safeNum(e.clientX || 0);
-        });
-
-        window.addEventListener('mouseup', () => {
-          this.isDragging = false;
-        });
-
-        window.addEventListener('mousemove', (e) => {
-          if (!this.isDragging) return;
-          const currentX = safeNum(e.clientX);
-          const deltaX = currentX - this.previousX;
-          this.previousX = currentX;
-
-          let newAngle = window.driveState.steeringAngle + deltaX * 0.8;
-          window.driveState.steeringAngle = Math.max(-90, Math.min(90, safeNum(newAngle)));
-        });
-      },
-
-      tick: function () {
-        if (!this.isDragging && !window.driveState.keyLeft && !window.driveState.keyRight) {
-          window.driveState.steeringAngle *= 0.90;
-          if (Math.abs(window.driveState.steeringAngle) < 0.1) {
-            window.driveState.steeringAngle = 0;
-          }
-        }
-
-        const angle = safeNum(window.driveState.steeringAngle);
-        this.el.setAttribute('rotation', `0 0 ${-angle}`);
-      }
-    });
-
-    // Vehicle Driving Systems (Realistic Smooth Steering Physics)
-    AFRAME.registerComponent('driving-system', {
-      init: function () {
-        this.wheelSpinAngle = 0;
-        this.wheelFL = document.getElementById('wheel-fl-pivot');
-        this.wheelFR = document.getElementById('wheel-fr-pivot');
-        this.wheelMeshes = document.querySelectorAll('.wheel-mesh');
-
-        window.addEventListener('keydown', (e) => this.handleKey(e, true));
-        window.addEventListener('keyup', (e) => this.handleKey(e, false));
-        this.setupTouchControls();
-      },
-
-      handleKey: function (e, isDown) {
-        const key = e.key.toLowerCase();
-        if (key === 'w' || key === 'arrowup') window.driveState.keyGas = isDown;
-        if (key === 's' || key === 'arrowdown') window.driveState.keyBrake = isDown;
-        if (key === 'a' || key === 'arrowleft') window.driveState.keyLeft = isDown;
-        if (key === 'd' || key === 'arrowright') window.driveState.keyRight = isDown;
-      },
-
-      setupTouchControls: function () {
-        const btnGas = document.getElementById('btn-gas');
-        const btnBrake = document.getElementById('btn-brake');
-
-        if (btnGas) {
-          btnGas.addEventListener('touchstart', (e) => { e.preventDefault(); window.driveState.touchGas = true; });
-          btnGas.addEventListener('touchend', (e) => { e.preventDefault(); window.driveState.touchGas = false; });
-          btnGas.addEventListener('mousedown', () => window.driveState.touchGas = true);
-          btnGas.addEventListener('mouseup', () => window.driveState.touchGas = false);
-        }
-
-        if (btnBrake) {
-          btnBrake.addEventListener('touchstart', (e) => { e.preventDefault(); window.driveState.touchBrake = true; });
-          btnBrake.addEventListener('touchend', (e) => { e.preventDefault(); window.driveState.touchBrake = false; });
-          btnBrake.addEventListener('mousedown', () => window.driveState.touchBrake = true);
-          btnBrake.addEventListener('mouseup', () => window.driveState.touchBrake = false);
-        }
-      },
-
-      tick: function (time, deltaTime) {
-        const dt = Math.min(safeNum(deltaTime) / 1000, 0.1);
-        if (dt <= 0) return;
-
-        const state = window.driveState;
-
-        // Smooth Keyboard Steering Rate (Lowered to prevent spinouts)
-        if (state.keyLeft) {
-          state.steeringAngle = Math.max(-90, state.steeringAngle - 60 * dt);
-        } else if (state.keyRight) {
-          state.steeringAngle = Math.min(90, state.steeringAngle + 60 * dt);
-        }
-
-        const effectiveGas = Math.max(state.gas, state.keyGas || state.touchGas ? 1.0 : 0);
-        const effectiveBrake = Math.max(state.brake, state.keyBrake || state.touchBrake ? 1.0 : 0);
-
-        let speed = safeNum(state.currentSpeed);
-
-        if (effectiveGas > 0) {
-          speed += state.acceleration * effectiveGas * dt;
-          if (speed > state.maxSpeed) speed = state.maxSpeed;
-        } else if (effectiveBrake > 0) {
-          if (speed > 0.5) {
-            speed -= state.brakeForce * effectiveBrake * dt;
-          } else {
-            speed -= state.acceleration * 0.5 * effectiveBrake * dt;
-            if (speed < state.maxReverseSpeed) speed = state.maxReverseSpeed;
-          }
-        } else {
-          if (speed > 0) {
-            speed = Math.max(0, speed - state.friction * dt);
-          } else if (speed < 0) {
-            speed = Math.min(0, speed + state.friction * dt);
-          }
-        }
-
-        state.currentSpeed = safeNum(speed);
-
-        // Turn Calculations (Slower Turn Speed, No Spinouts)
-        const currentPos = this.el.getAttribute('position') || { x: 0, y: 0.5, z: 0 };
-        const currentRot = this.el.getAttribute('rotation') || { x: 0, y: 0, z: 0 };
-
-        let posX = safeNum(currentPos.x);
-        let posY = 0.5;
-        let posZ = safeNum(currentPos.z);
-        let rotY = safeNum(currentRot.y);
-
-        const normalizedSteer = safeNum(state.steeringAngle) / 90; // -1 to +1
-        const maxTurnSpeedDeg = 12; // Lower turn rate to stay in control
-
-        if (Math.abs(speed) > 0.1) {
-          const directionFactor = speed >= 0 ? 1 : -1;
-          const speedFactor = Math.min(1.0, Math.abs(speed) / 5.0);
-          rotY -= normalizedSteer * maxTurnSpeedDeg * speedFactor * directionFactor * dt * 3.5;
-        }
-
-        // World Position Advancement
-        const rotRad = (rotY * Math.PI) / 180;
-        const vx = Math.sin(rotRad) * speed * dt;
-        const vz = Math.cos(rotRad) * speed * dt;
-
-        posX += safeNum(vx);
-        posZ += safeNum(vz);
-
-        this.el.setAttribute('position', `${posX} ${posY} ${posZ}`);
-        this.el.setAttribute('rotation', `0 ${rotY} 0`);
-
-        // Wheel Rotations
-        const frontWheelAngle = safeNum(state.steeringAngle) * 0.35;
-        if (this.wheelFL) this.wheelFL.setAttribute('rotation', `0 ${frontWheelAngle} 0`);
-        if (this.wheelFR) this.wheelFR.setAttribute('rotation', `0 ${frontWheelAngle} 0`);
-
-        this.wheelSpinAngle += (speed * dt * 250);
-        this.wheelMeshes.forEach(mesh => {
-          mesh.setAttribute('rotation', `${this.wheelSpinAngle} 0 90`);
-        });
-
-        this.updateHUD(speed);
-      },
-
-      updateHUD: function (speed) {
-        const speedDisplay = document.getElementById('speed-display');
-        const gearDisplay = document.getElementById('gear-display');
-        const steeringDisplay = document.getElementById('steering-display');
-
-        const mph = Math.abs(Math.round(speed * 2.237));
-        if (speedDisplay) speedDisplay.innerText = safeNum(mph);
-
-        if (gearDisplay) {
-          if (Math.abs(speed) < 0.2) {
-            gearDisplay.innerText = 'PARK';
-            gearDisplay.style.color = '#ffcc00';
-          } else if (speed > 0) {
-            gearDisplay.innerText = 'DRIVE (D)';
-            gearDisplay.style.color = '#00ffcc';
-          } else {
-            gearDisplay.innerText = 'REVERSE (R)';
-            gearDisplay.style.color = '#ff4d5e';
-          }
-        }
-
-        if (steeringDisplay) {
-          steeringDisplay.innerText = `${Math.round(window.driveState.steeringAngle)}°`;
-        }
-      }
-    });
-
-    function resetCarPosition() {
-      const carRig = document.getElementById('car-rig');
-      if (carRig) {
-        carRig.setAttribute('position', '0 0.5 0');
-        carRig.setAttribute('rotation', '0 0 0');
-        window.driveState.currentSpeed = 0;
-        window.driveState.steeringAngle = 0;
-      }
-    }
-
-    window.addEventListener('load', () => {
-      generateTextures();
-      spawnCityBuildings();
-    });
-  </script>
-</body>
-</html>
