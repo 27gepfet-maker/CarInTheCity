@@ -103,6 +103,8 @@
       return Math.max(min, Math.min(max, safeNum(val)));
     }
 
+    
+   
     window.addEventListener('DOMContentLoaded', () => {
       const roadCanvas = document.createElement('canvas');
       roadCanvas.width = 512;
@@ -156,6 +158,7 @@
           bCtx.fillStyle = isLit ? (Math.random() > 0.5 ? '#fde047' : '#38bdf8') : '#1e293b';
           bCtx.fillRect(x, y, wWidth, wHeight);
           
+          
           bCtx.strokeStyle = '#020617';
           bCtx.lineWidth = 2;
           bCtx.strokeRect(x, y, wWidth, wHeight);
@@ -166,6 +169,7 @@
       if (bldgImg) bldgImg.src = bldgCanvas.toDataURL();
     });
 
+    
     AFRAME.registerComponent('city-builder', {
       init: function () {
         const sceneEl = this.el;
@@ -175,9 +179,11 @@
         for (let z = -blockLength; z <= blockLength; z += spacing) {
           if (Math.abs(z) < 15) continue; 
 
+         
           const h1 = 35 + Math.random() * 45;
           const h2 = 35 + Math.random() * 45;
 
+         aww
           const b1 = document.createElement('a-box');
           b1.setAttribute('position', `-26 ${h1 / 2} ${z}`);
           b1.setAttribute('width', '18');
@@ -213,6 +219,7 @@
       }
     });
 
+   
     AFRAME.registerComponent('vr-steering-wheel', {
       init: function () {
         this.steeringAngle = 0; 
@@ -220,13 +227,483 @@
         this.handInitialAngle = 0;
         this.wheelInitialAngle = 0;
 
+        
         this.isMouseDragging = false;
         this.previousMouseX = 0;
 
+       
         this.onGrabStart = this.onGrabStart.bind(this);
         this.onGrabEnd = this.onGrabEnd.bind(this);
         this.onMouseDown = this.onMouseDown.bind(this);
         this.onMouseUp = this.onMouseUp.bind(this);
         this.onMouseMove = this.onMouseMove.bind(this);
 
-        const controllers = document.querySelectorAll('.
+       
+        const controllers = document.querySelectorAll('.vr-controller');
+        controllers.forEach(controller => {
+          controller.addEventListener('triggerdown', (e) => this.onGrabStart(e, controller));
+          controller.addEventListener('gripdown', (e) => this.onGrabStart(e, controller));
+          controller.addEventListener('triggerup', this.onGrabEnd);
+          controller.addEventListener('gripup', this.onGrabEnd);
+        });
+
+      
+        this.el.addEventListener('mousedown', this.onMouseDown);
+        window.addEventListener('mouseup', this.onMouseUp);
+        window.addEventListener('mousemove', this.onMouseMove);
+      },
+
+      onGrabStart: function (evt, controllerEl) {
+       
+        const wheelPos = new THREE.Vector3();
+        this.el.object3D.getWorldPosition(wheelPos);
+
+        const controllerPos = new THREE.Vector3();
+        controllerEl.object3D.getWorldPosition(controllerPos);
+
+        const dist = controllerPos.distanceTo(wheelPos);
+
+       
+        if (dist < 0.85) {
+          this.grabbingHand = controllerEl;
+          
+          
+          const localHandPos = this.el.object3D.worldToLocal(controllerPos.clone());
+          this.handInitialAngle = Math.atan2(localHandPos.y, localHandPos.x) * (180 / Math.PI);
+          this.wheelInitialAngle = this.steeringAngle;
+        }
+      },
+
+      onGrabEnd: function () {
+        this.grabbingHand = null;
+      },
+
+      onMouseDown: function (evt) {
+        if (this.grabbingHand) return; // Prioritize VR Controllers
+        this.isMouseDragging = true;
+        this.previousMouseX = evt.clientX;
+      },
+
+      onMouseUp: function () {
+        this.isMouseDragging = false;
+      },
+
+      onMouseMove: function (evt) {
+        if (!this.isMouseDragging) return;
+        const deltaX = evt.clientX - this.previousMouseX;
+        this.previousMouseX = evt.clientX;
+
+        
+        this.setSteeringAngle(this.steeringAngle - deltaX * 0.75);
+      },
+
+      setSteeringAngle: function(angle) {
+        this.steeringAngle = clamp(angle, -120, 120);
+        
+        
+        const currentRot = safeVec3(this.el.getAttribute('rotation'), {x: 65, y: 0, z: 0});
+        this.el.setAttribute('rotation', {
+          x: 65,
+          y: 0,
+          z: safeNum(this.steeringAngle)
+        });
+
+        
+        const hudAngle = document.getElementById('hud-steering');
+        if (hudAngle) hudAngle.textContent = `${Math.round(this.steeringAngle)}°`;
+      },
+
+      tick: function () {
+        
+        if (this.grabbingHand && this.grabbingHand.object3D) {
+          const controllerPos = new THREE.Vector3();
+          this.grabbingHand.object3D.getWorldPosition(controllerPos);
+
+         
+          const localHandPos = this.el.object3D.worldToLocal(controllerPos.clone());
+          
+         
+          const currentHandAngle = Math.atan2(localHandPos.y, localHandPos.x) * (180 / Math.PI);
+          const angleDelta = currentHandAngle - this.handInitialAngle;
+
+          this.setSteeringAngle(this.wheelInitialAngle + angleDelta);
+        }
+        
+        else if (!this.isMouseDragging && Math.abs(this.steeringAngle) > 0.1) {
+          const autoCenterSpeed = 2.5;
+          if (this.steeringAngle > 0) {
+            this.setSteeringAngle(Math.max(0, this.steeringAngle - autoCenterSpeed));
+          } else {
+            this.setSteeringAngle(Math.min(0, this.steeringAngle + autoCenterSpeed));
+          }
+        }
+      }
+    });
+
+  
+    AFRAME.registerComponent('vehicle-physics', {
+      init: function () {
+       
+        this.speed = 0; 
+        this.maxForwardSpeed = 65;
+        this.maxReverseSpeed = -20; 
+        this.acceleration = 25; 
+        this.braking = 35; 
+        this.drag = 8; 
+
+        
+        this.throttleInput = 0; 
+        this.keyboardSteerInput = 0; 
+
+        
+        this.leftController = document.getElementById('left-hand');
+        this.rightController = document.getElementById('right-hand');
+
+        
+        this.keys = {};
+        window.addEventListener('keydown', (e) => { this.keys[e.code] = true; });
+        window.addEventListener('keyup', (e) => { this.keys[e.code] = false; });
+
+      
+        if (this.rightController) {
+          this.rightController.addEventListener('thumbstickmoved', (e) => {
+            if (Math.abs(e.detail.y) > 0.1) this.vrThumbThrottle = -e.detail.y;
+            else this.vrThumbThrottle = 0;
+          });
+        }
+        if (this.leftController) {
+          this.leftController.addEventListener('thumbstickmoved', (e) => {
+            if (Math.abs(e.detail.x) > 0.1) this.vrThumbSteer = e.detail.x;
+            else this.vrThumbSteer = 0;
+          });
+        }
+        this.vrThumbThrottle = 0;
+        this.vrThumbSteer = 0;
+      },
+
+      readInputs: function () {
+        this.throttleInput = 0;
+        this.keyboardSteerInput = 0;
+
+        
+        if (this.keys['KeyW'] || this.keys['ArrowUp']) this.throttleInput += 1;
+        if (this.keys['KeyS'] || this.keys['ArrowDown']) this.throttleInput -= 1;
+        if (this.keys['KeyA'] || this.keys['ArrowLeft']) this.keyboardSteerInput -= 1;
+        if (this.keys['KeyD'] || this.keys['ArrowRight']) this.keyboardSteerInput += 1;
+
+       
+        let vrTriggerInput = 0;
+        if (this.rightController && this.rightController.components['tracked-controls']) {
+          const rSession = this.el.sceneEl.xrSession;
+          if (rSession) {
+           
+            const rGamepad = this.rightController.components['tracked-controls'].controller;
+            const lGamepad = this.leftController ? this.leftController.components['tracked-controls'].controller : null;
+
+            if (rGamepad && rGamepad.buttons[0]) {
+              vrTriggerInput += rGamepad.buttons[0].value; 
+            }
+            if (lGamepad && lGamepad.buttons[0]) {
+              vrTriggerInput -= lGamepad.buttons[0].value; 
+            }
+          }
+        }
+
+        
+        if (Math.abs(vrTriggerInput) > 0.05) {
+          this.throttleInput = vrTriggerInput;
+        } else if (Math.abs(this.vrThumbThrottle) > 0.1) {
+          this.throttleInput = this.vrThumbThrottle;
+        }
+
+        
+        const wheelEl = document.getElementById('steering-wheel');
+        const wheelComp = wheelEl ? wheelEl.components['vr-steering-wheel'] : null;
+
+        if (wheelComp && !wheelComp.grabbingHand && !wheelComp.isMouseDragging) {
+          if (Math.abs(this.vrThumbSteer) > 0.1) {
+            wheelComp.setSteeringAngle(this.vrThumbSteer * 90);
+          } else if (Math.abs(this.keyboardSteerInput) > 0.1) {
+            wheelComp.setSteeringAngle(wheelComp.steeringAngle + this.keyboardSteerInput * 3.5);
+          }
+        }
+      },
+
+      tick: function (time, timeDelta) {
+        if (!timeDelta) return;
+        const dt = Math.min(timeDelta / 1000, 0.1); 
+
+        this.readInputs();
+
+       
+        if (this.throttleInput > 0) {
+          this.speed += this.acceleration * this.throttleInput * dt;
+        } else if (this.throttleInput < 0) {
+          this.speed += this.acceleration * this.throttleInput * dt;
+        } else {
+           
+          if (this.speed > 0) {
+            this.speed = Math.max(0, this.speed - this.drag * dt);
+          } else if (this.speed < 0) {
+            this.speed = Math.min(0, this.speed + this.drag * dt);
+          }
+        }
+
+       
+        this.speed = clamp(this.speed, this.maxReverseSpeed, this.maxForwardSpeed);
+
+      
+        const wheelEl = document.getElementById('steering-wheel');
+        const steeringAngle = wheelEl ? wheelEl.components['vr-steering-wheel'].steeringAngle : 0;
+
+       
+        const frontPivots = document.querySelectorAll('.front-wheel-pivot');
+        frontPivots.forEach(pivot => {
+          pivot.setAttribute('rotation', { x: 0, y: safeNum(steeringAngle * 0.45), z: 0 });
+        });
+
+      
+        const velocityMs = this.speed * 0.44704;
+        const wheelRadius = 0.4;
+        const spinRateRad = velocityMs / wheelRadius; // rad/s
+        const spinDeltaDeg = spinRateRad * dt * (180 / Math.PI);
+
+        const wheelSpinners = document.querySelectorAll('.wheel-spin');
+        wheelSpinners.forEach(spinner => {
+          const rot = safeVec3(spinner.getAttribute('rotation'));
+          spinner.setAttribute('rotation', {
+            x: safeNum(rot.x - spinDeltaDeg),
+            y: rot.y,
+            z: rot.z
+          });
+        });
+
+        
+        const carRig = document.getElementById('car-rig');
+        if (!carRig) return;
+
+        const currentRot = safeVec3(carRig.getAttribute('rotation'));
+        const currentPos = safeVec3(carRig.getAttribute('position'));
+
+      
+        const turnFactor = (steeringAngle / 120) * (velocityMs / 12) * 48 * dt;
+        const newHeadingY = safeNum(currentRot.y + turnFactor);
+
+        
+        const headingRad = newHeadingY * (Math.PI / 180);
+        const deltaX = -Math.sin(headingRad) * velocityMs * dt;
+        const deltaZ = -Math.cos(headingRad) * velocityMs * dt;
+
+        const newPosX = safeNum(currentPos.x + deltaX);
+        const newPosZ = safeNum(currentPos.z + deltaZ);
+
+        
+        carRig.setAttribute('rotation', { x: 0, y: newHeadingY, z: 0 });
+        carRig.setAttribute('position', { x: newPosX, y: currentPos.y, z: newPosZ });
+
+       
+        const hudSpeed = document.getElementById('hud-speed');
+        if (hudSpeed) hudSpeed.textContent = `${Math.abs(Math.round(this.speed))} MPH`;
+
+        const hudGear = document.getElementById('hud-gear');
+        if (hudGear) {
+          if (this.speed > 0.5) hudGear.textContent = 'DRIVE';
+          else if (this.speed < -0.5) hudGear.textContent = 'REVERSE';
+          else hudGear.textContent = 'NEUTRAL';
+        }
+      }
+    });
+  </script>
+</head>
+<body>
+
+  
+  <div id="vr-hud">
+    <h1>
+      <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/><path d="M12 2a10 10 0 0 1 10 10"/><path d="M12 12 8 8"/></svg>
+      Meta Quest 3 Driving Simulator
+    </h1>
+    <p><strong>Quest VR Controllers:</strong> Grab steering wheel with Trigger/Grip & rotate hand. Right Trigger = Gas, Left Trigger = Brake/Reverse.</p>
+    <p><strong>Desktop Fallback:</strong> Click & drag steering wheel with mouse. Use W/S or Arrow keys to drive.</p>
+    
+    <div class="hud-stats">
+      <div class="stat-card">
+        <div class="stat-label">Speed</div>
+        <div class="stat-value" id="hud-speed">0 MPH</div>
+      </div>
+      <div class="stat-card">
+        <div class="stat-label">Steering</div>
+        <div class="stat-value" id="hud-steering">0°</div>
+      </div>
+      <div class="stat-card">
+        <div class="stat-label">Gear</div>
+        <div class="stat-value" id="hud-gear" style="color: #38BDF8;">NEUTRAL</div>
+      </div>
+      <div class="stat-card">
+        <div class="stat-label">WebXR Status</div>
+        <div class="stat-value" style="color:#4ADE80; font-size:13px; margin-top:4px;">READY</div>
+      </div>
+    </div>
+  </div>
+
+  
+  <a-scene 
+    vehicle-physics 
+    city-builder 
+    renderer="antialias: true; colorManagement: true; highRefreshRate: true;"
+    cursor="rayOrigin: mouse"
+    raycaster="objects: .interactable">
+
+    <a-assets>
+      <img id="canvas-road" alt="Road Texture">
+      <img id="canvas-building" alt="Building Texture">
+    </a-assets>
+
+   
+    <a-sky color="#38BDF8"></a-sky>
+    <a-light type="directional" position="-10 20 10" intensity="1.0" light="castShadow: true"></a-light>
+    <a-light type="ambient" intensity="0.6" color="#F1F5F9"></a-light>
+
+  
+    <a-plane 
+      position="0 0 0" 
+      rotation="-90 0 0" 
+      width="100" 
+      height="1200" 
+      material="src: #canvas-road; repeat: 2 120; roughness: 0.8;">
+    </a-plane>
+
+  
+    <a-entity id="car-rig" position="0 0 0">
+      
+     
+      <a-entity id="car-body">
+        
+        <a-box position="0 0.65 0" width="2.1" height="0.65" depth="4.6" color="#DC2626" material="metalness: 0.3; roughness: 0.2;"></a-box>
+       
+        <a-box position="0 0.85 -1.6" width="2.0" height="0.25" depth="1.2" color="#B91C1C"></a-box>
+       
+        <a-box position="0 1.35 0.2" width="1.85" height="0.8" depth="2.2" color="#020617" material="opacity: 0.85; transparent: true; metalness: 0.9; roughness: 0.1;"></a-box>
+       
+        <a-box position="0 1.78 0.2" width="1.88" height="0.08" depth="2.1" color="#B91C1C"></a-box>
+        
+        <a-box position="0 0.95 -0.8" width="1.8" height="0.35" depth="0.6" color="#1E293B"></a-box>
+        
+        
+        <a-box position="-1.1 1.15 -0.7" width="0.25" height="0.15" depth="0.15" color="#0F172A"></a-box>
+        <a-box position="1.1 1.15 -0.7" width="0.25" height="0.15" depth="0.15" color="#0F172A"></a-box>
+
+      
+        <a-box position="-0.75 0.7 -2.31" width="0.4" height="0.2" depth="0.05" color="#FEF08A" material="emissive: #FEF08A; emissiveIntensity: 1;"></a-box>
+        <a-box position="0.75 0.7 -2.31" width="0.4" height="0.2" depth="0.05" color="#FEF08A" material="emissive: #FEF08A; emissiveIntensity: 1;"></a-box>
+        
+        <a-box position="-0.75 0.7 2.31" width="0.4" height="0.2" depth="0.05" color="#EF4444" material="emissive: #EF4444; emissiveIntensity: 0.8;"></a-box>
+        <a-box position="0.75 0.7 2.31" width="0.4" height="0.2" depth="0.05" color="#EF4444" material="emissive: #EF4444; emissiveIntensity: 0.8;"></a-box>
+      </a-entity>
+
+   
+      
+      
+      <a-entity class="front-wheel-pivot" position="-1.12 0.4 -1.4">
+        <a-entity class="wheel-spin">
+          <a-cylinder radius="0.4" height="0.28" rotation="0 0 90" color="#0F172A"></a-cylinder>
+        
+          <a-cylinder radius="0.28" height="0.29" rotation="0 0 90" color="#94A3B8"></a-cylinder>
+          <a-box width="0.08" height="0.52" depth="0.3" color="#020617"></a-box>
+          <a-box width="0.52" height="0.08" depth="0.3" color="#020617"></a-box>
+        </a-entity>
+      </a-entity>
+
+      
+      <a-entity class="front-wheel-pivot" position="1.12 0.4 -1.4">
+        <a-entity class="wheel-spin">
+          <a-cylinder radius="0.4" height="0.28" rotation="0 0 90" color="#0F172A"></a-cylinder>
+        
+          <a-cylinder radius="0.28" height="0.29" rotation="0 0 90" color="#94A3B8"></a-cylinder>
+          <a-box width="0.08" height="0.52" depth="0.3" color="#020617"></a-box>
+          <a-box width="0.52" height="0.08" depth="0.3" color="#020617"></a-box>
+        </a-entity>
+      </a-entity>
+
+     
+      <a-entity position="-1.12 0.4 1.4">
+        <a-entity class="wheel-spin">
+          <a-cylinder radius="0.4" height="0.28" rotation="0 0 90" color="#0F172A"></a-cylinder>
+          <a-cylinder radius="0.28" height="0.29" rotation="0 0 90" color="#94A3B8"></a-cylinder>
+          <a-box width="0.08" height="0.52" depth="0.3" color="#020617"></a-box>
+          <a-box width="0.52" height="0.08" depth="0.3" color="#020617"></a-box>
+        </a-entity>
+      </a-entity>
+
+     
+      <a-entity position="1.12 0.4 1.4">
+        <a-entity class="wheel-spin">
+          <a-cylinder radius="0.4" height="0.28" rotation="0 0 90" color="#0F172A"></a-cylinder>
+          <a-cylinder radius="0.28" height="0.29" rotation="0 0 90" color="#94A3B8"></a-cylinder>
+          <a-box width="0.08" height="0.52" depth="0.3" color="#020617"></a-box>
+          <a-box width="0.52" height="0.08" depth="0.3" color="#020617"></a-box>
+        </a-entity>
+      </a-entity>
+
+     
+      <a-entity position="-0.42 1.02 -0.58">
+        
+        <a-cylinder radius="0.04" height="0.45" rotation="25 0 0" color="#334155"></a-cylinder>
+
+       
+        <a-entity 
+          id="steering-wheel" 
+          class="interactable"
+          position="0 0.18 -0.08" 
+          rotation="65 0 0" 
+          vr-steering-wheel>
+          
+          
+          <a-torus radius="0.22" radius-tubular="0.025" color="#0F172A" material="roughness: 0.5;"></a-torus>
+          
+          <a-cylinder radius="0.06" height="0.04" rotation="90 0 0" color="#1E293B"></a-cylinder>
+         
+          <a-cylinder radius="0.025" height="0.042" rotation="90 0 0" color="#DC2626"></a-cylinder>
+          
+          <a-box width="0.03" height="0.2" depth="0.02" position="0 -0.09 0" color="#475569"></a-box>
+          <a-box width="0.2" height="0.03" depth="0.02" position="-0.09 0.02 0" color="#475569"></a-box>
+          <a-box width="0.2" height="0.03" depth="0.02" position="0.09 0.02 0" color="#475569"></a-box>
+        </a-entity>
+      </a-entity>
+
+    
+      <a-entity id="rig" position="0 0 0">
+      
+        <a-camera 
+          id="camera" 
+          position="-0.42 1.3 -0.1" 
+          look-controls="pointerLockEnabled: false" 
+          wasd-controls="enabled: false">
+        </a-camera>
+
+       
+        <a-entity 
+          id="left-hand" 
+          class="vr-controller"
+          oculus-touch-controls="hand: left" 
+          hand-controls="hand: left; handModelStyle: lowPoly; color: #38BDF8;"
+          raycaster="objects: .interactable; showLine: true; far: 2;"
+          cursor="fuse: false;">
+        </a-entity>
+
+       
+        <a-entity 
+          id="right-hand" 
+          class="vr-controller"
+          oculus-touch-controls="hand: right" 
+          hand-controls="hand: right; handModelStyle: lowPoly; color: #38BDF8;"
+          raycaster="objects: .interactable; showLine: true; far: 2;"
+          cursor="fuse: false;">
+        </a-entity>
+      </a-entity>
+
+    </a-entity>
+
+  </a-scene>
+</body>
+</html>
