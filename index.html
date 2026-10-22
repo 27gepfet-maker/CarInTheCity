@@ -5,7 +5,7 @@
   <title>VR Driving Simulator - Meta Quest 3</title>
   <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
   <!-- A-Frame WebXR Framework -->
-  <script src="https://aframe.io/releases/1.4.2/aframe.min.js"></script> 
+  <script src="https://aframe.io/releases/1.4.2/aframe.min.js"></script>
   
   <style>
     body {
@@ -88,7 +88,7 @@
 
   <script>
     // ---------------------------------------------------------------------
-    // UTILITY & MATHEMATICAL SAFETY
+    // UTILITY & MATHEMATICAL SAFETY (Prevents WebXR NaN camera blue-screen crash)
     // ---------------------------------------------------------------------
     function safeNum(val, fallback = 0) {
       return (typeof val === 'number' && !isNaN(val) && isFinite(val)) ? val : fallback;
@@ -111,28 +111,33 @@
     // DYNAMIC PROCEDURAL TEXTURE GENERATORS
     // ---------------------------------------------------------------------
     window.addEventListener('DOMContentLoaded', () => {
-      // 1. Generate Road Canvas Texture
+      // 1. Generate Road Asphalt Canvas Texture with Lane Lines
       const roadCanvas = document.createElement('canvas');
       roadCanvas.width = 512;
       roadCanvas.height = 512;
       const rCtx = roadCanvas.getContext('2d');
       
+      // Base dark asphalt
       rCtx.fillStyle = '#1e293b';
       rCtx.fillRect(0, 0, 512, 512);
       
+      // Asphalt noise
       rCtx.fillStyle = 'rgba(255,255,255,0.03)';
       for(let i = 0; i < 4000; i++) {
         rCtx.fillRect(Math.random() * 512, Math.random() * 512, 2, 2);
       }
       
+      // Concrete Sidewalk Shoulders
       rCtx.fillStyle = '#475569';
       rCtx.fillRect(0, 0, 40, 512);
       rCtx.fillRect(472, 0, 40, 512);
       
+      // Double Yellow Center Line
       rCtx.fillStyle = '#eab308';
       rCtx.fillRect(250, 0, 4, 512);
       rCtx.fillRect(258, 0, 4, 512);
 
+      // Dashed White Lane Lines
       rCtx.fillStyle = '#f8fafc';
       for(let y = 0; y < 512; y += 64) {
         rCtx.fillRect(130, y + 12, 6, 32);
@@ -142,15 +147,17 @@
       const roadImg = document.getElementById('canvas-road');
       if (roadImg) roadImg.src = roadCanvas.toDataURL();
 
-      // 2. Generate Building Canvas Texture
+      // 2. Generate Building Window Canvas Texture
       const bldgCanvas = document.createElement('canvas');
       bldgCanvas.width = 256;
       bldgCanvas.height = 512;
       const bCtx = bldgCanvas.getContext('2d');
 
+      // Wall background
       bCtx.fillStyle = '#0f172a';
       bCtx.fillRect(0, 0, 256, 512);
 
+      // Windows Grid
       const rows = 16;
       const cols = 6;
       const wWidth = 24;
@@ -160,10 +167,12 @@
         for(let c = 0; c < cols; c++) {
           const x = 16 + c * 38;
           const y = 16 + r * 30;
+          // Random lit/unlit windows
           const isLit = Math.random() > 0.3;
           bCtx.fillStyle = isLit ? (Math.random() > 0.5 ? '#fde047' : '#38bdf8') : '#1e293b';
           bCtx.fillRect(x, y, wWidth, wHeight);
           
+          // Window frames
           bCtx.strokeStyle = '#020617';
           bCtx.lineWidth = 2;
           bCtx.strokeRect(x, y, wWidth, wHeight);
@@ -184,11 +193,13 @@
         const spacing = 40;
 
         for (let z = -blockLength; z <= blockLength; z += spacing) {
-          if (Math.abs(z) < 15) continue;
+          if (Math.abs(z) < 15) continue; // Keep spawn area clear
 
+          // Left & Right Building Height Variations
           const h1 = 35 + Math.random() * 45;
           const h2 = 35 + Math.random() * 45;
 
+          // Left Skyscraper
           const b1 = document.createElement('a-box');
           b1.setAttribute('position', `-26 ${h1 / 2} ${z}`);
           b1.setAttribute('width', '18');
@@ -197,6 +208,7 @@
           b1.setAttribute('material', `src: #canvas-building; repeat: 2 ${Math.floor(h1 / 5)}; roughness: 0.3;`);
           sceneEl.appendChild(b1);
 
+          // Right Skyscraper
           const b2 = document.createElement('a-box');
           b2.setAttribute('position', `26 ${h2 / 2} ${z}`);
           b2.setAttribute('width', '18');
@@ -205,6 +217,7 @@
           b2.setAttribute('material', `src: #canvas-building; repeat: 2 ${Math.floor(h2 / 5)}; roughness: 0.3;`);
           sceneEl.appendChild(b2);
 
+          // Streetlights
           if (Math.abs(z) % 80 === 0) {
             this.createStreetlight(sceneEl, -13, z, 1);
             this.createStreetlight(sceneEl, 13, z, -1);
@@ -225,24 +238,28 @@
     });
 
     // ---------------------------------------------------------------------
-    // VR STEERING WHEEL COMPONENT
+    // VR STEERING WHEEL & CONTROLLER GRAB COMPONENT
+    // Supports 6DOF Quest 3 Touch Controllers + Mouse/Touch Drag Fallback
     // ---------------------------------------------------------------------
     AFRAME.registerComponent('vr-steering-wheel', {
       init: function () {
-        this.steeringAngle = 0;
-        this.grabbingHand = null;
+        this.steeringAngle = 0; // Degrees (-120 to +120)
+        this.grabbingHand = null; // Reference to grabbing controller entity
         this.handInitialAngle = 0;
         this.wheelInitialAngle = 0;
 
+        // Desktop Mouse Drag Fallback state
         this.isMouseDragging = false;
         this.previousMouseX = 0;
 
+        // Bind event handlers
         this.onGrabStart = this.onGrabStart.bind(this);
         this.onGrabEnd = this.onGrabEnd.bind(this);
         this.onMouseDown = this.onMouseDown.bind(this);
         this.onMouseUp = this.onMouseUp.bind(this);
         this.onMouseMove = this.onMouseMove.bind(this);
 
+        // Attach WebXR Controller Grab Listeners
         const controllers = document.querySelectorAll('.vr-controller');
         controllers.forEach(controller => {
           controller.addEventListener('triggerdown', (e) => this.onGrabStart(e, controller));
@@ -251,13 +268,14 @@
           controller.addEventListener('gripup', this.onGrabEnd);
         });
 
+        // Attach Mouse & Touch Fallback Listeners
         this.el.addEventListener('mousedown', this.onMouseDown);
         window.addEventListener('mouseup', this.onMouseUp);
         window.addEventListener('mousemove', this.onMouseMove);
       },
 
       onGrabStart: function (evt, controllerEl) {
-        if (!controllerEl || !controllerEl.object3D) return;
+        // Calculate distance between controller ray/position and steering wheel
         const wheelPos = new THREE.Vector3();
         this.el.object3D.getWorldPosition(wheelPos);
 
@@ -266,8 +284,11 @@
 
         const dist = controllerPos.distanceTo(wheelPos);
 
+        // Allow grab if hand is within 0.8m of the steering wheel
         if (dist < 0.85) {
           this.grabbingHand = controllerEl;
+          
+          // Calculate initial angle of controller relative to wheel center in local space
           const localHandPos = this.el.object3D.worldToLocal(controllerPos.clone());
           this.handInitialAngle = Math.atan2(localHandPos.y, localHandPos.x) * (180 / Math.PI);
           this.wheelInitialAngle = this.steeringAngle;
@@ -279,7 +300,7 @@
       },
 
       onMouseDown: function (evt) {
-        if (this.grabbingHand) return;
+        if (this.grabbingHand) return; // Prioritize VR Controllers
         this.isMouseDragging = true;
         this.previousMouseX = evt.clientX;
       },
@@ -292,32 +313,428 @@
         if (!this.isMouseDragging) return;
         const deltaX = evt.clientX - this.previousMouseX;
         this.previousMouseX = evt.clientX;
+
+        // Rotate wheel based on horizontal mouse movement
         this.setSteeringAngle(this.steeringAngle - deltaX * 0.75);
       },
 
       setSteeringAngle: function(angle) {
         this.steeringAngle = clamp(angle, -120, 120);
+        
+        // Safely rotate visual steering wheel on Z-axis (Z-roll)
+        const currentRot = safeVec3(this.el.getAttribute('rotation'), {x: 65, y: 0, z: 0});
         this.el.setAttribute('rotation', {
           x: 65,
           y: 0,
           z: safeNum(this.steeringAngle)
         });
 
+        // Update HUD display
         const hudAngle = document.getElementById('hud-steering');
         if (hudAngle) hudAngle.textContent = `${Math.round(this.steeringAngle)}°`;
       },
 
       tick: function () {
+        // 1. Process Active VR Hand Controller Grabbing
         if (this.grabbingHand && this.grabbingHand.object3D) {
           const controllerPos = new THREE.Vector3();
           this.grabbingHand.object3D.getWorldPosition(controllerPos);
+
+          // Convert controller world position into steering wheel local coordinates
           const localHandPos = this.el.object3D.worldToLocal(controllerPos.clone());
+          
+          // Calculate current angle around Z-axis
           const currentHandAngle = Math.atan2(localHandPos.y, localHandPos.x) * (180 / Math.PI);
           const angleDelta = currentHandAngle - this.handInitialAngle;
+
           this.setSteeringAngle(this.wheelInitialAngle + angleDelta);
-        } else if (!this.isMouseDragging && Math.abs(this.steeringAngle) > 0.1) {
+        }
+        // 2. Auto-center wheel smoothly when not being held
+        else if (!this.isMouseDragging && Math.abs(this.steeringAngle) > 0.1) {
           const autoCenterSpeed = 2.5;
           if (this.steeringAngle > 0) {
             this.setSteeringAngle(Math.max(0, this.steeringAngle - autoCenterSpeed));
           } else {
-            this
+            this.setSteeringAngle(Math.min(0, this.steeringAngle + autoCenterSpeed));
+          }
+        }
+      }
+    });
+
+    // ---------------------------------------------------------------------
+    // VR DRIVING PHYSICS & VEHICLE CONTROL ENGINE
+    // Handles Quest Thumbsticks, Triggers, Keyboard Controls, Acceleration & Turning
+    // ---------------------------------------------------------------------
+    AFRAME.registerComponent('vehicle-physics', {
+      init: function () {
+        // Vehicle state variables
+        this.speed = 0; // Current velocity in mph
+        this.maxForwardSpeed = 65; // Max speed forward
+        this.maxReverseSpeed = -20; // Max speed reverse
+        this.acceleration = 25; // Acceleration rate
+        this.braking = 35; // Friction/Braking force
+        this.drag = 8; // Idle coasting deceleration
+
+        // Control Inputs
+        this.throttleInput = 0; // -1 (Reverse) to +1 (Accelerate)
+        this.keyboardSteerInput = 0; // -1 (Left) to +1 (Right) for keyboard fallback
+
+        // Controller References
+        this.leftController = document.getElementById('left-hand');
+        this.rightController = document.getElementById('right-hand');
+
+        // Desktop Keyboard Listeners
+        this.keys = {};
+        window.addEventListener('keydown', (e) => { this.keys[e.code] = true; });
+        window.addEventListener('keyup', (e) => { this.keys[e.code] = false; });
+
+        // Thumbstick listeners for Oculus Touch
+        if (this.rightController) {
+          this.rightController.addEventListener('thumbstickmoved', (e) => {
+            if (Math.abs(e.detail.y) > 0.1) this.vrThumbThrottle = -e.detail.y;
+            else this.vrThumbThrottle = 0;
+          });
+        }
+        if (this.leftController) {
+          this.leftController.addEventListener('thumbstickmoved', (e) => {
+            if (Math.abs(e.detail.x) > 0.1) this.vrThumbSteer = e.detail.x;
+            else this.vrThumbSteer = 0;
+          });
+        }
+        this.vrThumbThrottle = 0;
+        this.vrThumbSteer = 0;
+      },
+
+      readInputs: function () {
+        this.throttleInput = 0;
+        this.keyboardSteerInput = 0;
+
+        // 1. Check Desktop Keyboard Inputs
+        if (this.keys['KeyW'] || this.keys['ArrowUp']) this.throttleInput += 1;
+        if (this.keys['KeyS'] || this.keys['ArrowDown']) this.throttleInput -= 1;
+        if (this.keys['KeyA'] || this.keys['ArrowLeft']) this.keyboardSteerInput -= 1;
+        if (this.keys['KeyD'] || this.keys['ArrowRight']) this.keyboardSteerInput += 1;
+
+        // 2. Check Quest VR Controller Inputs
+        // Right Controller Trigger = Accelerate
+        // Left Controller Trigger = Brake / Reverse
+        let vrTriggerInput = 0;
+        if (this.rightController && this.rightController.components['tracked-controls']) {
+          const rSession = this.el.sceneEl.xrSession;
+          if (rSession) {
+            // Check Quest triggers via gamepad API if available
+            const rGamepad = this.rightController.components['tracked-controls'].controller;
+            const lGamepad = this.leftController ? this.leftController.components['tracked-controls'].controller : null;
+
+            if (rGamepad && rGamepad.buttons[0]) {
+              vrTriggerInput += rGamepad.buttons[0].value; // Right trigger accelerate
+            }
+            if (lGamepad && lGamepad.buttons[0]) {
+              vrTriggerInput -= lGamepad.buttons[0].value; // Left trigger brake/reverse
+            }
+          }
+        }
+
+        // Merge inputs safely
+        if (Math.abs(vrTriggerInput) > 0.05) {
+          this.throttleInput = vrTriggerInput;
+        } else if (Math.abs(this.vrThumbThrottle) > 0.1) {
+          this.throttleInput = this.vrThumbThrottle;
+        }
+
+        // Quest Left Thumbstick Steer fallback (if steering wheel isn't grabbed)
+        const wheelEl = document.getElementById('steering-wheel');
+        const wheelComp = wheelEl ? wheelEl.components['vr-steering-wheel'] : null;
+
+        if (wheelComp && !wheelComp.grabbingHand && !wheelComp.isMouseDragging) {
+          if (Math.abs(this.vrThumbSteer) > 0.1) {
+            wheelComp.setSteeringAngle(this.vrThumbSteer * 90);
+          } else if (Math.abs(this.keyboardSteerInput) > 0.1) {
+            wheelComp.setSteeringAngle(wheelComp.steeringAngle + this.keyboardSteerInput * 3.5);
+          }
+        }
+      },
+
+      tick: function (time, timeDelta) {
+        if (!timeDelta) return;
+        const dt = Math.min(timeDelta / 1000, 0.1); // Cap delta time to prevent physics leaps
+
+        this.readInputs();
+
+        // 1. Calculate Acceleration & Speed
+        if (this.throttleInput > 0) {
+          this.speed += this.acceleration * this.throttleInput * dt;
+        } else if (this.throttleInput < 0) {
+          this.speed += this.acceleration * this.throttleInput * dt;
+        } else {
+          // Coasting Friction
+          if (this.speed > 0) {
+            this.speed = Math.max(0, this.speed - this.drag * dt);
+          } else if (this.speed < 0) {
+            this.speed = Math.min(0, this.speed + this.drag * dt);
+          }
+        }
+
+        // Clamp speed
+        this.speed = clamp(this.speed, this.maxReverseSpeed, this.maxForwardSpeed);
+
+        // 2. Get Steering Wheel Rotation
+        const wheelEl = document.getElementById('steering-wheel');
+        const steeringAngle = wheelEl ? wheelEl.components['vr-steering-wheel'].steeringAngle : 0;
+
+        // 3. Update Front Wheel Visual Pivot Angles
+        const frontPivots = document.querySelectorAll('.front-wheel-pivot');
+        frontPivots.forEach(pivot => {
+          pivot.setAttribute('rotation', { x: 0, y: safeNum(steeringAngle * 0.45), z: 0 });
+        });
+
+        // 4. Spin all 4 wheels based on road velocity
+        // v (m/s) = speed (mph) * 0.44704
+        const velocityMs = this.speed * 0.44704;
+        const wheelRadius = 0.4;
+        const spinRateRad = velocityMs / wheelRadius; // rad/s
+        const spinDeltaDeg = spinRateRad * dt * (180 / Math.PI);
+
+        const wheelSpinners = document.querySelectorAll('.wheel-spin');
+        wheelSpinners.forEach(spinner => {
+          const rot = safeVec3(spinner.getAttribute('rotation'));
+          spinner.setAttribute('rotation', {
+            x: safeNum(rot.x - spinDeltaDeg),
+            y: rot.y,
+            z: rot.z
+          });
+        });
+
+        // 5. Update Car Chassis Position and Rotation in 3D Space
+        const carRig = document.getElementById('car-rig');
+        if (!carRig) return;
+
+        const currentRot = safeVec3(carRig.getAttribute('rotation'));
+        const currentPos = safeVec3(carRig.getAttribute('position'));
+
+        // Ackermann-style turning rate: faster turn at moderate speeds, reduced at standing still
+        const turnFactor = (steeringAngle / 120) * (velocityMs / 12) * 48 * dt;
+        const newHeadingY = safeNum(currentRot.y + turnFactor);
+
+        // Calculate velocity vector in direction car is facing
+        const headingRad = newHeadingY * (Math.PI / 180);
+        const deltaX = -Math.sin(headingRad) * velocityMs * dt;
+        const deltaZ = -Math.cos(headingRad) * velocityMs * dt;
+
+        const newPosX = safeNum(currentPos.x + deltaX);
+        const newPosZ = safeNum(currentPos.z + deltaZ);
+
+        // Apply safe transformations
+        carRig.setAttribute('rotation', { x: 0, y: newHeadingY, z: 0 });
+        carRig.setAttribute('position', { x: newPosX, y: currentPos.y, z: newPosZ });
+
+        // 6. Update HUD Stats
+        const hudSpeed = document.getElementById('hud-speed');
+        if (hudSpeed) hudSpeed.textContent = `${Math.abs(Math.round(this.speed))} MPH`;
+
+        const hudGear = document.getElementById('hud-gear');
+        if (hudGear) {
+          if (this.speed > 0.5) hudGear.textContent = 'DRIVE';
+          else if (this.speed < -0.5) hudGear.textContent = 'REVERSE';
+          else hudGear.textContent = 'NEUTRAL';
+        }
+      }
+    });
+  </script>
+</head>
+<body>
+
+  <!-- 2D HUD / Instructions Overlay -->
+  <div id="vr-hud">
+    <h1>
+      <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/><path d="M12 2a10 10 0 0 1 10 10"/><path d="M12 12 8 8"/></svg>
+      Meta Quest 3 Driving Simulator
+    </h1>
+    <p><strong>Quest VR Controllers:</strong> Grab steering wheel with Trigger/Grip & rotate hand. Right Trigger = Gas, Left Trigger = Brake/Reverse.</p>
+    <p><strong>Desktop Fallback:</strong> Click & drag steering wheel with mouse. Use W/S or Arrow keys to drive.</p>
+    
+    <div class="hud-stats">
+      <div class="stat-card">
+        <div class="stat-label">Speed</div>
+        <div class="stat-value" id="hud-speed">0 MPH</div>
+      </div>
+      <div class="stat-card">
+        <div class="stat-label">Steering</div>
+        <div class="stat-value" id="hud-steering">0°</div>
+      </div>
+      <div class="stat-card">
+        <div class="stat-label">Gear</div>
+        <div class="stat-value" id="hud-gear" style="color: #38BDF8;">NEUTRAL</div>
+      </div>
+      <div class="stat-card">
+        <div class="stat-label">WebXR Status</div>
+        <div class="stat-value" style="color:#4ADE80; font-size:13px; margin-top:4px;">READY</div>
+      </div>
+    </div>
+  </div>
+
+  <!-- A-Frame VR Scene -->
+  <a-scene 
+    vehicle-physics 
+    city-builder 
+    renderer="antialias: true; colorManagement: true; highRefreshRate: true;"
+    cursor="rayOrigin: mouse"
+    raycaster="objects: .interactable">
+
+    <a-assets>
+      <img id="canvas-road" alt="Road Texture">
+      <img id="canvas-building" alt="Building Texture">
+    </a-assets>
+
+    <!-- Environment Sky & Sunlight -->
+    <a-sky color="#38BDF8"></a-sky>
+    <a-light type="directional" position="-10 20 10" intensity="1.0" light="castShadow: true"></a-light>
+    <a-light type="ambient" intensity="0.6" color="#F1F5F9"></a-light>
+
+    <!-- Street Asphalt Floor Plane -->
+    <a-plane 
+      position="0 0 0" 
+      rotation="-90 0 0" 
+      width="100" 
+      height="1200" 
+      material="src: #canvas-road; repeat: 2 120; roughness: 0.8;">
+    </a-plane>
+
+    <!-- ========================================================================= -->
+    <!-- CAR VEHICLE RIG & DRIVER SEAT                                             -->
+    <!-- ========================================================================= -->
+    <a-entity id="car-rig" position="0 0 0">
+      
+      <!-- CAR CHASSIS & CABIN (Built from grouped primitives) -->
+      <a-entity id="car-body">
+        <!-- Main Red Chassis -->
+        <a-box position="0 0.65 0" width="2.1" height="0.65" depth="4.6" color="#DC2626" material="metalness: 0.3; roughness: 0.2;"></a-box>
+        <!-- Hood Nose Slope -->
+        <a-box position="0 0.85 -1.6" width="2.0" height="0.25" depth="1.2" color="#B91C1C"></a-box>
+        <!-- Cabin Glass Roof & Pillars -->
+        <a-box position="0 1.35 0.2" width="1.85" height="0.8" depth="2.2" color="#020617" material="opacity: 0.85; transparent: true; metalness: 0.9; roughness: 0.1;"></a-box>
+        <!-- Roof Top -->
+        <a-box position="0 1.78 0.2" width="1.88" height="0.08" depth="2.1" color="#B91C1C"></a-box>
+        <!-- Dashboard Interior -->
+        <a-box position="0 0.95 -0.8" width="1.8" height="0.35" depth="0.6" color="#1E293B"></a-box>
+        
+        <!-- Side Mirrors -->
+        <a-box position="-1.1 1.15 -0.7" width="0.25" height="0.15" depth="0.15" color="#0F172A"></a-box>
+        <a-box position="1.1 1.15 -0.7" width="0.25" height="0.15" depth="0.15" color="#0F172A"></a-box>
+
+        <!-- Headlights -->
+        <a-box position="-0.75 0.7 -2.31" width="0.4" height="0.2" depth="0.05" color="#FEF08A" material="emissive: #FEF08A; emissiveIntensity: 1;"></a-box>
+        <a-box position="0.75 0.7 -2.31" width="0.4" height="0.2" depth="0.05" color="#FEF08A" material="emissive: #FEF08A; emissiveIntensity: 1;"></a-box>
+        <!-- Taillights -->
+        <a-box position="-0.75 0.7 2.31" width="0.4" height="0.2" depth="0.05" color="#EF4444" material="emissive: #EF4444; emissiveIntensity: 0.8;"></a-box>
+        <a-box position="0.75 0.7 2.31" width="0.4" height="0.2" depth="0.05" color="#EF4444" material="emissive: #EF4444; emissiveIntensity: 0.8;"></a-box>
+      </a-entity>
+
+      <!-- 4 WHEELS WITH HIGH-CONTRAST SPOKES -->
+      
+      <!-- Front Left Wheel (Pivots & Spins) -->
+      <a-entity class="front-wheel-pivot" position="-1.12 0.4 -1.4">
+        <a-entity class="wheel-spin">
+          <a-cylinder radius="0.4" height="0.28" rotation="0 0 90" color="#0F172A"></a-cylinder>
+          <!-- Rim & Spokes -->
+          <a-cylinder radius="0.28" height="0.29" rotation="0 0 90" color="#94A3B8"></a-cylinder>
+          <a-box width="0.08" height="0.52" depth="0.3" color="#020617"></a-box>
+          <a-box width="0.52" height="0.08" depth="0.3" color="#020617"></a-box>
+        </a-entity>
+      </a-entity>
+
+      <!-- Front Right Wheel (Pivots & Spins) -->
+      <a-entity class="front-wheel-pivot" position="1.12 0.4 -1.4">
+        <a-entity class="wheel-spin">
+          <a-cylinder radius="0.4" height="0.28" rotation="0 0 90" color="#0F172A"></a-cylinder>
+          <!-- Rim & Spokes -->
+          <a-cylinder radius="0.28" height="0.29" rotation="0 0 90" color="#94A3B8"></a-cylinder>
+          <a-box width="0.08" height="0.52" depth="0.3" color="#020617"></a-box>
+          <a-box width="0.52" height="0.08" depth="0.3" color="#020617"></a-box>
+        </a-entity>
+      </a-entity>
+
+      <!-- Rear Left Wheel (Spins) -->
+      <a-entity position="-1.12 0.4 1.4">
+        <a-entity class="wheel-spin">
+          <a-cylinder radius="0.4" height="0.28" rotation="0 0 90" color="#0F172A"></a-cylinder>
+          <a-cylinder radius="0.28" height="0.29" rotation="0 0 90" color="#94A3B8"></a-cylinder>
+          <a-box width="0.08" height="0.52" depth="0.3" color="#020617"></a-box>
+          <a-box width="0.52" height="0.08" depth="0.3" color="#020617"></a-box>
+        </a-entity>
+      </a-entity>
+
+      <!-- Rear Right Wheel (Spins) -->
+      <a-entity position="1.12 0.4 1.4">
+        <a-entity class="wheel-spin">
+          <a-cylinder radius="0.4" height="0.28" rotation="0 0 90" color="#0F172A"></a-cylinder>
+          <a-cylinder radius="0.28" height="0.29" rotation="0 0 90" color="#94A3B8"></a-cylinder>
+          <a-box width="0.08" height="0.52" depth="0.3" color="#020617"></a-box>
+          <a-box width="0.52" height="0.08" depth="0.3" color="#020617"></a-box>
+        </a-entity>
+      </a-entity>
+
+      <!-- INTERACTIVE STEERING WHEEL & COLUMN -->
+      <a-entity position="-0.42 1.02 -0.58">
+        <!-- Steering Column -->
+        <a-cylinder radius="0.04" height="0.45" rotation="25 0 0" color="#334155"></a-cylinder>
+
+        <!-- Torus Steering Wheel Mount Point -->
+        <a-entity 
+          id="steering-wheel" 
+          class="interactable"
+          position="0 0.18 -0.08" 
+          rotation="65 0 0" 
+          vr-steering-wheel>
+          
+          <!-- Outer Wheel Ring -->
+          <a-torus radius="0.22" radius-tubular="0.025" color="#0F172A" material="roughness: 0.5;"></a-torus>
+          <!-- Center Horn Cap -->
+          <a-cylinder radius="0.06" height="0.04" rotation="90 0 0" color="#1E293B"></a-cylinder>
+          <!-- Center Logo Crest -->
+          <a-cylinder radius="0.025" height="0.042" rotation="90 0 0" color="#DC2626"></a-cylinder>
+          <!-- 3 Steering Wheel Spokes -->
+          <a-box width="0.03" height="0.2" depth="0.02" position="0 -0.09 0" color="#475569"></a-box>
+          <a-box width="0.2" height="0.03" depth="0.02" position="-0.09 0.02 0" color="#475569"></a-box>
+          <a-box width="0.2" height="0.03" depth="0.02" position="0.09 0.02 0" color="#475569"></a-box>
+        </a-entity>
+      </a-entity>
+
+      <!-- ========================================================================= -->
+      <!-- DRIVER CAMERA RIG & 6DOF VR TRACKED CONTROLLERS                           -->
+      <!-- ========================================================================= -->
+      <a-entity id="rig" position="0 0 0">
+        <!-- First Person Seat Camera -->
+        <a-camera 
+          id="camera" 
+          position="-0.42 1.3 -0.1" 
+          look-controls="pointerLockEnabled: false" 
+          wasd-controls="enabled: false">
+        </a-camera>
+
+        <!-- Quest Left Hand Controller -->
+        <a-entity 
+          id="left-hand" 
+          class="vr-controller"
+          oculus-touch-controls="hand: left" 
+          hand-controls="hand: left; handModelStyle: lowPoly; color: #38BDF8;"
+          raycaster="objects: .interactable; showLine: true; far: 2;"
+          cursor="fuse: false;">
+        </a-entity>
+
+        <!-- Quest Right Hand Controller -->
+        <a-entity 
+          id="right-hand" 
+          class="vr-controller"
+          oculus-touch-controls="hand: right" 
+          hand-controls="hand: right; handModelStyle: lowPoly; color: #38BDF8;"
+          raycaster="objects: .interactable; showLine: true; far: 2;"
+          cursor="fuse: false;">
+        </a-entity>
+      </a-entity>
+
+    </a-entity>
+
+  </a-scene>
+</body>
+</html>
