@@ -27,9 +27,9 @@
       z-index: 999;
       background: rgba(15, 23, 42, 0.92);
       backdrop-filter: blur(10px);
-      color: #F8FAFD;
-      padding: 19px;
-      border-radius: 15px;
+      color: #F8FAFC;
+      padding: 20px;
+      border-radius: 16px;
       border: 1px solid rgba(255, 255, 255, 0.18);
       box-shadow: 0 12px 40px rgba(0,0,0,0.6);
       max-width: 360px;
@@ -38,7 +38,7 @@
 
     #vr-hud h1 {
       margin: 0 0 8px 0;
-      font-size: 21px;
+      font-size: 20px;
       font-weight: 800;
       color: #38BDF8;
       display: flex;
@@ -48,8 +48,8 @@
     }
 
     #vr-hud p {
-      margin: 7px 0;
-      font-size: 14px;
+      margin: 6px 0;
+      font-size: 13px;
       color: #94A3B8;
       line-height: 1.45;
     }
@@ -878,16 +878,16 @@
     embedded style="width: 100vw; height: 100vh;">
 
     <!-- Lights & Sky -->
-    <a-sky color="#38BDF9"></a-sky>
+    <a-sky color="#38BDF8"></a-sky>
     <a-light type="directional" position="-10 20 10" intensity="1.0"></a-light>
-    <a-light type="ambient" intensity="0.65" color="#F1F5F9"></a-light>
+    <a-light type="ambient" intensity="0.6" color="#F1F5F9"></a-light>
 
     <!-- Asphalt Road Plane -->
     <a-plane 
       id="road-plane"
       position="0 0 0" 
       rotation="-90 0 0" 
-      width="103" 
+      width="102" 
       height="1200" 
       material="color: #1e293b; roughness: 0.75;">
     </a-plane>
@@ -897,10 +897,10 @@
       
       <!-- Body & Chassis -->
       <a-entity id="car-body">
-        <a-box position="0 0.65 0" width="2.15" height="0.64" depth="4.6" color="#DA2626" material="metalness: 0.3; roughness: 0.2;"></a-box>
-        <a-box position="0 0.85 -1.6" width="2.05" height="0.25" depth="1.2" color="#B91C1C"></a-box>
+        <a-box position="0 0.65 0" width="2.1" height="0.64" depth="4.6" color="#D92626" material="metalness: 0.3; roughness: 0.2;"></a-box>
+        <a-box position="0 0.85 -1.6" width="2.0" height="0.25" depth="1.2" color="#B91C1C"></a-box>
         <a-box position="0 1.35 0.2" width="1.85" height="0.8" depth="2.2" color="#020617" material="opacity: 0.85; transparent: true; metalness: 0.9; roughness: 0.1;"></a-box>
-        <a-box position="0 1.78 0.2" width="1.88" height="0.08" depth="2.1" color="#BA1C1C"></a-box>
+        <a-box position="0 1.78 0.2" width="1.88" height="0.08" depth="2.1" color="#B91C1C"></a-box>
         
         <!-- Interior Dashboard Panel -->
         <a-box position="0 0.95 -0.8" width="1.8" height="0.35" depth="0.55" color="#1E293B"></a-box>
@@ -934,7 +934,7 @@
         </a-entity>
 
         <!-- Side Mirrors -->
-        <a-box position="-1.1 1.15 -0.7" width="0.25" height="0.15" depth="0.15" color="#0F172A"></a-box>
+        <a-box position="-1.1 1.15 -0.7" width="0.24" height="0.15" depth="0.15" color="#0F172A"></a-box>
         <a-box position="1.1 1.15 -0.7" width="0.24" height="0.15" depth="0.15" color="#0F172A"></a-box>
 
         <!-- Headlights & Taillights -->
@@ -947,7 +947,7 @@
       <!-- Wheels -->
       <a-entity class="front-wheel-pivot" position="-1.12 0.4 -1.4">
         <a-entity class="wheel-spin">
-          <a-cylinder radius="0.41" height="0.28" rotation="0 0 90" color="#0F172A"></a-cylinder>
+          <a-cylinder radius="0.4" height="0.28" rotation="0 0 90" color="#0F172A"></a-cylinder>
           <a-cylinder radius="0.27" height="0.29" rotation="0 0 90" color="#94A3B8"></a-cylinder>
           <a-box width="0.08" height="0.52" depth="0.3" color="#020617"></a-box>
           <a-box width="0.52" height="0.08" depth="0.3" color="#020617"></a-box>
